@@ -1,7 +1,6 @@
 package net.kubik.entitylodoptimizer;
 
 import net.fabricmc.api.ModInitializer;
-
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
@@ -18,7 +17,7 @@ public class EntityLODOptimizer implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		LOGGER.info("Entity LOD Mod Initialized");
+		LOGGER.info("Initializing!");
 		ServerTickEvents.START_SERVER_TICK.register(this::onServerTick);
 	}
 
@@ -43,6 +42,7 @@ public class EntityLODOptimizer implements ModInitializer {
 
 		PlayerEntity nearestPlayer = world.getClosestPlayer(entity, -1);
 		if (nearestPlayer == null) {
+			enableFullAI((MobEntity) livingEntity);
 			return;
 		}
 
@@ -59,11 +59,11 @@ public class EntityLODOptimizer implements ModInitializer {
 
 	private void enableFullAI(MobEntity entity) {
 		entity.setAiDisabled(false);
+		entity.setSilent(false);
 	}
 
 	private void enableSimplifiedAI(MobEntity entity) {
 		entity.setAiDisabled(false);
-
 		int updateInterval = 40;
 		if (entity.age % updateInterval != 0) {
 			entity.setSilent(true);

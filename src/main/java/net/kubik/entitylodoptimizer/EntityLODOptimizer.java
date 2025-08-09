@@ -3,7 +3,6 @@ package net.kubik.entitylodoptimizer;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.MinecraftServer;
@@ -15,65 +14,65 @@ public class EntityLODOptimizer implements ModInitializer {
 	public static final String MOD_ID = "entitylodoptimizer";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
+	private static final int SCAN_INTERVAL_TICKS = 20;
+	private static final int SIMPLIFIED_UPDATE_INTERVAL = 40;
+	private static final double FULL_RADIUS = 10.0D;
+	private static final double SIMPLIFIED_RADIUS = 100.0D;
+
+	private static final double FULL_RADIUS_SQ = FULL_RADIUS * FULL_RADIUS;
+	private static final double SIMPLIFIED_RADIUS_SQ = SIMPLIFIED_RADIUS * SIMPLIFIED_RADIUS;
+
+	private long tickCounter = 0;
+
 	@Override
 	public void onInitialize() {
-		LOGGER.info("Initializing!");
+		LOGGER.info("Entity LOD Optimizer initializing (scanInterval={} ticks, simplifiedInterval={} ticks)", SCAN_INTERVAL_TICKS, SIMPLIFIED_UPDATE_INTERVAL);
 		ServerTickEvents.START_SERVER_TICK.register(this::onServerTick);
 	}
 
 	private void onServerTick(MinecraftServer server) {
+		tickCounter++;
+		if (tickCounter % SCAN_INTERVAL_TICKS != 0) return;
+
 		for (ServerWorld world : server.getWorlds()) {
 			for (Entity entity : world.iterateEntities()) {
-				if (entity instanceof MobEntity mobEntity) {
-					adjustEntityAI(mobEntity, world);
+				if (entity instanceof MobEntity mob && !(entity instanceof PlayerEntity)) {
+					adjustEntityAI(mob, world);
 				}
 			}
 		}
 	}
 
-	private void adjustEntityAI(Entity entity, ServerWorld world) {
-		if (!(entity instanceof LivingEntity livingEntity)) {
-			return;
-		}
+	private void adjustEntityAI(MobEntity mob, ServerWorld world) {
+		PlayerEntity nearestPlayer = world.getClosestPlayer(mob, SIMPLIFIED_RADIUS);
+		double distSq = nearestPlayer == null ? Double.POSITIVE_INFINITY : mob.squaredDistanceTo(nearestPlayer);
 
-		if (entity instanceof PlayerEntity) {
-			return;
-		}
-
-		PlayerEntity nearestPlayer = world.getClosestPlayer(entity, -1);
-		if (nearestPlayer == null) {
-			enableFullAI((MobEntity) livingEntity);
-			return;
-		}
-
-		double distanceSquared = entity.squaredDistanceTo(nearestPlayer);
-
-		if (distanceSquared < 100) {
-			enableFullAI((MobEntity) livingEntity);
-		} else if (distanceSquared < 10000) {
-			enableSimplifiedAI((MobEntity) livingEntity);
+		if (distSq <= FULL_RADIUS_SQ) {
+			enableFullAI(mob);
+		} else if (distSq <= SIMPLIFIED_RADIUS_SQ) {
+			enableSimplifiedAI(mob, world);
 		} else {
-			disableAI((MobEntity) livingEntity);
+			disableAI(mob);
 		}
 	}
 
-	private void enableFullAI(MobEntity entity) {
-		entity.setAiDisabled(false);
-		entity.setSilent(false);
+	private void enableFullAI(MobEntity mob) {
+		mob.setAiDisabled(false);
+		mob.setSilent(false);
 	}
 
-	private void enableSimplifiedAI(MobEntity entity) {
-		entity.setAiDisabled(false);
-		int updateInterval = 40;
-		if (entity.age % updateInterval != 0) {
-			entity.setSilent(true);
+	private void enableSimplifiedAI(MobEntity mob, ServerWorld world) {
+		mob.setAiDisabled(false);
+		if (world.getTime() % SIMPLIFIED_UPDATE_INTERVAL == 0) {
+			mob.tickMovement();
+			mob.setSilent(false);
 		} else {
-			entity.setSilent(false);
-			entity.tickMovement();
+			mob.setSilent(true);
 		}
 	}
 
-	private void disableAI(MobEntity entity) {
-		entity.setAiDisabled(true);
+	private void disableAI(MobEntity mob) {
+		mob.setAiDisabled(true);
+		mob.setSilent(true);
 	}
 }
